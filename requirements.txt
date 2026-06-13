@@ -2,8 +2,5 @@ streamlit
 pandas
 numpy
 plotly
-google-api-python-client
 wordcloud
 matplotlib
-scikit-learn
-konlpy
