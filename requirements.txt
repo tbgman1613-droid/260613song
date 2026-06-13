@@ -1,0 +1,7 @@
+streamlit
+pandas
+plotly
+matplotlib
+wordcloud
+youtube-comment-downloader
+textblob
