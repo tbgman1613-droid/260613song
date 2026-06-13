@@ -1,258 +1,161 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-from collections import Counter
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-import re
 
-# ----------------------------
-# 페이지 설정
-# ----------------------------
 st.set_page_config(
-    page_title="🎵 AI 음악 장르 분석기",
+    page_title="🎵 AI 음악 추천기",
     page_icon="🎵",
     layout="wide"
 )
 
-# ----------------------------
+# -------------------
 # CSS
-# ----------------------------
+# -------------------
+
 st.markdown("""
 <style>
 
-.stApp {
+.stApp{
     background: linear-gradient(135deg,#0f172a,#1e293b);
 }
 
-.title {
+.title{
     text-align:center;
+    color:white;
     font-size:55px;
     font-weight:bold;
-    color:white;
 }
 
-.subtitle {
-    text-align:center;
-    color:#cbd5e1;
-    font-size:18px;
-}
-
-.genre-box {
-    background:#334155;
-    padding:15px;
+.card{
+    background:#1e293b;
+    padding:20px;
     border-radius:15px;
-    text-align:center;
+    margin-bottom:15px;
     color:white;
-    font-size:20px;
+    border:1px solid #334155;
+}
+
+.genre{
+    color:#38bdf8;
     font-weight:bold;
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# ----------------------------
-# 제목
-# ----------------------------
 st.markdown(
-    "<div class='title'>🎵 AI 음악 장르 분석기</div>",
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    "<div class='subtitle'>텍스트 속 음악 성향을 분석해보세요</div>",
+    "<div class='title'>🎵 AI 음악 추천기</div>",
     unsafe_allow_html=True
 )
 
 st.write("")
+st.write("")
 
-# ----------------------------
-# 장르 소개
-# ----------------------------
-col1,col2,col3,col4,col5 = st.columns(5)
+# -------------------
+# 음악 데이터
+# -------------------
 
-genres = [
-    ("🎤","힙합"),
-    ("🎼","발라드"),
-    ("🎻","클래식"),
-    ("🎸","록"),
-    ("🎷","재즈")
-]
+music_db = {
 
-for col, (emoji, genre) in zip([col1,col2,col3,col4,col5], genres):
-    with col:
+    "발라드":[
+        ("밤양갱","비비","달콤하고 감성적인 발라드"),
+        ("사건의 지평선","윤하","이별 후 성장 이야기"),
+        ("헤어지자 말해요","박재정","애절한 감성"),
+        ("취중고백","김민석","고백 감성"),
+        ("너의 모든 순간","성시경","대표 고백송"),
+        ("Love Wins All","아이유","감성 발라드"),
+        ("눈의 꽃","박효신","겨울 감성"),
+        ("좋니","윤종신","이별 명곡"),
+        ("비가 오는 날엔","비스트","감성 자극"),
+        ("어떻게 이별까지 사랑하겠어","AKMU","서정적 발라드")
+    ],
+
+    "힙합":[
+        ("V","BIG Naughty","트렌디 힙합"),
+        ("Counting Stars","BE'O","감성 랩"),
+        ("DNA Remix","릴보이","강렬한 플로우"),
+        ("호미들","사이렌","국내 대표 힙합"),
+        ("Achoo","미란이","에너지 넘치는 곡"),
+        ("Buru Star","창모","트랩 힙합"),
+        ("METEOR","창모","국민 힙합곡"),
+        ("Freak","릴러말즈","강한 비트"),
+        ("쇼미더머니","Various","랩 경연 대표곡"),
+        ("Selfmade Orange","창모","성공 스토리")
+    ],
+
+    "클래식":[
+        ("Canon in D","파헬벨","세계적인 클래식"),
+        ("Moonlight Sonata","베토벤","월광 소나타"),
+        ("Für Elise","베토벤","엘리제를 위하여"),
+        ("Spring","비발디","사계 중 봄"),
+        ("Swan Lake","차이코프스키","백조의 호수"),
+        ("The Blue Danube","요한 슈트라우스","아름다운 왈츠"),
+        ("Clair de Lune","드뷔시","달빛"),
+        ("Ave Maria","슈베르트","대표 성가"),
+        ("Nocturne Op.9","쇼팽","야상곡"),
+        ("Hungarian Dance No.5","브람스","활기찬 곡")
+    ],
+
+    "록":[
+        ("질풍가도","유정석","국민 록"),
+        ("걱정말아요 그대","들국화","명곡"),
+        ("나는 나비","YB","희망 메시지"),
+        ("붉은 노을","이문세","록 스타일 편곡 인기"),
+        ("Lonely Night","부활","록 발라드"),
+        ("It's My Life","Bon Jovi","세계적 록"),
+        ("Numb","Linkin Park","록 명곡"),
+        ("Zombie","The Cranberries","대표 록"),
+        ("Believer","Imagine Dragons","강렬한 에너지"),
+        ("Bohemian Rhapsody","Queen","전설적인 록")
+    ],
+
+    "재즈":[
+        ("Fly Me To The Moon","Frank Sinatra","대표 재즈"),
+        ("Take Five","Dave Brubeck","재즈 명곡"),
+        ("Autumn Leaves","Bill Evans","감성 재즈"),
+        ("My Funny Valentine","Chet Baker","재즈 스탠다드"),
+        ("What A Wonderful World","Louis Armstrong","따뜻한 곡"),
+        ("So What","Miles Davis","모던 재즈"),
+        ("Blue In Green","Miles Davis","감성 재즈"),
+        ("All Of Me","Ella Fitzgerald","재즈 보컬"),
+        ("Misty","Erroll Garner","재즈 피아노"),
+        ("Summertime","Ella Fitzgerald","대표 명곡")
+    ]
+}
+
+# -------------------
+# 장르 선택
+# -------------------
+
+genre = st.selectbox(
+    "🎼 좋아하는 장르를 선택하세요",
+    list(music_db.keys())
+)
+
+# -------------------
+# 추천 버튼
+# -------------------
+
+if st.button("🤖 AI 추천받기", use_container_width=True):
+
+    st.success(f"{genre} 장르 추천 결과")
+
+    for idx, music in enumerate(music_db[genre], start=1):
+
+        title, artist, desc = music
+
         st.markdown(
             f"""
-            <div class='genre-box'>
-            {emoji}<br>{genre}
+            <div class="card">
+            <h3>🎵 {idx}. {title}</h3>
+
+            <p><b>가수/작곡가</b> : {artist}</p>
+
+            <p><b>설명</b> : {desc}</p>
+
+            <p class="genre">{genre}</p>
             </div>
             """,
             unsafe_allow_html=True
         )
-
-st.write("")
-st.write("")
-
-# ----------------------------
-# 장르 키워드
-# ----------------------------
-genre_keywords = {
-    "힙합": [
-        "랩","비트","플로우","래퍼",
-        "힙합","스웨그","트랩","드릴"
-    ],
-
-    "발라드": [
-        "사랑","이별","감성",
-        "눈물","추억","목소리"
-    ],
-
-    "클래식": [
-        "오케스트라","교향곡",
-        "피아노","바이올린",
-        "첼로","클래식"
-    ],
-
-    "록": [
-        "록","rock",
-        "기타","드럼",
-        "밴드","헤비메탈"
-    ],
-
-    "재즈": [
-        "재즈","색소폰",
-        "블루스","스윙",
-        "즉흥연주"
-    ]
-}
-
-# ----------------------------
-# 입력 방식
-# ----------------------------
-st.subheader("📝 텍스트 입력")
-
-text = st.text_area(
-    "노래 설명, 가사 느낌, 감상문 등을 입력하세요",
-    height=250
-)
-
-# ----------------------------
-# 분석 함수
-# ----------------------------
-def analyze_text(text):
-
-    scores = {
-        "힙합":0,
-        "발라드":0,
-        "클래식":0,
-        "록":0,
-        "재즈":0
-    }
-
-    lower = text.lower()
-
-    for genre, keywords in genre_keywords.items():
-
-        for keyword in keywords:
-
-            if keyword.lower() in lower:
-                scores[genre] += 1
-
-    return scores
-
-# ----------------------------
-# 워드클라우드
-# ----------------------------
-def draw_wordcloud(text):
-
-    wc = WordCloud(
-        width=1200,
-        height=600,
-        background_color="black"
-    ).generate(text)
-
-    fig, ax = plt.subplots(figsize=(12,6))
-
-    ax.imshow(wc)
-
-    ax.axis("off")
-
-    st.pyplot(fig)
-
-# ----------------------------
-# 분석
-# ----------------------------
-if st.button("🚀 분석 시작", use_container_width=True):
-
-    if len(text.strip()) == 0:
-        st.warning("텍스트를 입력해주세요.")
-        st.stop()
-
-    result = analyze_text(text)
-
-    df = pd.DataFrame({
-        "장르": result.keys(),
-        "점수": result.values()
-    })
-
-    st.subheader("📊 장르 분석 결과")
-
-    fig = px.bar(
-        df,
-        x="장르",
-        y="점수",
-        color="장르",
-        text="점수"
-    )
-
-    st.plotly_chart(
-        fig,
-        use_container_width=True
-    )
-
-    winner = max(result, key=result.get)
-
-    st.success(
-        f"🎯 가장 높은 성향은 '{winner}' 입니다!"
-    )
-
-    st.subheader("📈 점수 비율")
-
-    pie = px.pie(
-        df,
-        names="장르",
-        values="점수"
-    )
-
-    st.plotly_chart(
-        pie,
-        use_container_width=True
-    )
-
-    st.subheader("☁️ 워드클라우드")
-
-    cleaned = re.sub(
-        r"[^가-힣a-zA-Z ]",
-        "",
-        text
-    )
-
-    draw_wordcloud(cleaned)
-
-    st.subheader("🔥 TOP 단어")
-
-    words = cleaned.split()
-
-    top_words = Counter(words).most_common(10)
-
-    top_df = pd.DataFrame(
-        top_words,
-        columns=["단어","횟수"]
-    )
-
-    st.dataframe(
-        top_df,
-        use_container_width=True
-    )
 
     st.balloons()
