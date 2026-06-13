@@ -1,259 +1,338 @@
 import streamlit as st
-from youtube_comment_downloader import YoutubeCommentDownloader
-from collections import Counter
 import pandas as pd
 import plotly.express as px
+from googleapiclient.discovery import build
+from collections import Counter
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-from textblob import TextBlob
 import re
 
+# -----------------------
+# 페이지 설정
+# -----------------------
 st.set_page_config(
-    page_title="🎵 Music Comment Analyzer",
+    page_title="🎵 AI 유튜브 댓글 음악 분석기",
     page_icon="🎵",
     layout="wide"
 )
 
-# ----------------------------
-# 디자인
-# ----------------------------
-
+# -----------------------
+# CSS
+# -----------------------
 st.markdown("""
 <style>
 .main {
-    background-color: #0e1117;
+    background: linear-gradient(135deg,#0f172a,#1e293b);
 }
 
-.big-title{
+.big-title {
     text-align:center;
-    font-size:55px;
+    font-size:50px;
     font-weight:bold;
-    background: linear-gradient(90deg,#00d4ff,#ff00ff);
-    -webkit-background-clip:text;
-    color:transparent;
+    color:white;
 }
 
-.sub{
-    text-align:center;
-    color:#bbbbbb;
-    font-size:20px;
-}
-
-.card{
-    background:#1e1e1e;
-    padding:20px;
+.genre-card {
+    background:#1e293b;
+    padding:15px;
     border-radius:15px;
+    text-align:center;
+    color:white;
 }
 </style>
 """, unsafe_allow_html=True)
 
+# -----------------------
+# API 입력
+# -----------------------
 st.markdown(
-    '<div class="big-title">🎵 Music Comment Analyzer</div>',
+    "<div class='big-title'>🎵 AI 유튜브 댓글 음악 분석기</div>",
     unsafe_allow_html=True
 )
 
-st.markdown(
-    '<div class="sub">유튜브 댓글만으로 음악 장르를 분석해보세요</div>',
-    unsafe_allow_html=True
+st.write("")
+
+api_key = st.text_input(
+    "YouTube API Key 입력",
+    type="password"
 )
 
-st.divider()
+video_id = st.text_input(
+    "유튜브 Video ID 입력"
+)
 
-# ----------------------------
+# -----------------------
+# 장르 설명
+# -----------------------
+
+col1,col2,col3,col4,col5 = st.columns(5)
+
+with col1:
+    st.markdown("""
+    <div class='genre-card'>
+    🎤<br>
+    힙합
+    </div>
+    """, unsafe_allow_html=True)
+
+with col2:
+    st.markdown("""
+    <div class='genre-card'>
+    🎼<br>
+    발라드
+    </div>
+    """, unsafe_allow_html=True)
+
+with col3:
+    st.markdown("""
+    <div class='genre-card'>
+    🎻<br>
+    클래식
+    </div>
+    """, unsafe_allow_html=True)
+
+with col4:
+    st.markdown("""
+    <div class='genre-card'>
+    🎸<br>
+    록
+    </div>
+    """, unsafe_allow_html=True)
+
+with col5:
+    st.markdown("""
+    <div class='genre-card'>
+    🎷<br>
+    재즈
+    </div>
+    """, unsafe_allow_html=True)
+
+# -----------------------
 # 장르 키워드
-# ----------------------------
+# -----------------------
 
 genre_keywords = {
     "힙합": [
-        "랩","비트","플로우","스웩","힙합",
-        "라임","드릴","트랩","가사"
+        "랩","flow","비트","swag","힙합",
+        "래퍼","드릴","트랩"
     ],
 
     "발라드": [
-        "감성","눈물","사랑","추억","이별",
-        "발라드","슬프다","울컥","감동"
+        "감성","눈물","사랑","이별",
+        "목소리","발라드"
     ],
 
     "클래식": [
         "오케스트라","피아노","바이올린",
-        "클래식","교향곡","연주","베토벤"
+        "클래식","교향곡"
     ],
 
     "록": [
-        "록","기타","밴드","헤드뱅잉",
-        "락","드럼","에너지","강렬"
+        "기타","밴드","록",
+        "rock","드럼","헤비"
     ],
 
     "재즈": [
-        "재즈","스윙","색소폰","즉흥",
-        "블루스","그루브","재지"
+        "재즈","sax","색소폰",
+        "스윙","블루스"
     ]
 }
 
-# ----------------------------
-# 댓글 수집
-# ----------------------------
+# -----------------------
+# 댓글 가져오기
+# -----------------------
 
-url = st.text_input(
-    "🎬 유튜브 URL 입력",
-    placeholder="https://youtube.com/watch?v=..."
-)
+def get_comments(api_key, video_id):
 
-if st.button("분석 시작 🚀"):
+    youtube = build(
+        "youtube",
+        "v3",
+        developerKey=api_key
+    )
 
-    if not url:
-        st.warning("URL을 입력해주세요.")
-        st.stop()
+    comments = []
 
-    with st.spinner("댓글 수집 중..."):
+    request = youtube.commentThreads().list(
+        part="snippet",
+        videoId=video_id,
+        maxResults=100
+    )
 
-        downloader = YoutubeCommentDownloader()
+    response = request.execute()
 
-        comments = []
+    while request:
 
-        try:
-            for comment in downloader.get_comments_from_url(url):
-                comments.append(comment["text"])
+        for item in response["items"]:
 
-                if len(comments) >= 500:
-                    break
+            text = item["snippet"]\
+                ["topLevelComment"]\
+                ["snippet"]\
+                ["textDisplay"]
 
-        except:
-            st.error("댓글 수집 실패")
-            st.stop()
+            comments.append(text)
 
-    if len(comments) == 0:
-        st.error("댓글 없음")
-        st.stop()
-
-    text = " ".join(comments)
-
-    # ----------------------------
-    # 장르 점수
-    # ----------------------------
-
-    scores = {}
-
-    for genre, words in genre_keywords.items():
-
-        score = 0
-
-        for word in words:
-            score += text.count(word)
-
-        scores[genre] = score
-
-    total = sum(scores.values())
-
-    if total == 0:
-        total = 1
-
-    genre_df = pd.DataFrame({
-        "장르": list(scores.keys()),
-        "확률": [round(v/total*100,2)
-                 for v in scores.values()]
-    })
-
-    # ----------------------------
-    # 감성분석
-    # ----------------------------
-
-    sentiments = []
-
-    for c in comments[:300]:
-
-        try:
-            polarity = TextBlob(c).sentiment.polarity
-            sentiments.append(polarity)
-        except:
-            pass
-
-    avg_sentiment = round(sum(sentiments)/len(sentiments),2)
-
-    # ----------------------------
-    # 결과
-    # ----------------------------
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.subheader("🎼 장르 확률")
-
-        fig = px.bar(
-            genre_df,
-            x="장르",
-            y="확률",
-            text="확률",
-            color="장르"
+        request = youtube.commentThreads().list_next(
+            request,
+            response
         )
 
-        fig.update_layout(height=500)
+        if request:
+            response = request.execute()
 
-        st.plotly_chart(
-            fig,
-            use_container_width=True
-        )
+    return comments
 
-    with col2:
+# -----------------------
+# 장르 분석
+# -----------------------
 
-        st.subheader("😊 댓글 감정 점수")
+def analyze_genre(comments):
 
-        st.metric(
-            "평균 감정",
-            avg_sentiment
-        )
+    result = {
+        "힙합":0,
+        "발라드":0,
+        "클래식":0,
+        "록":0,
+        "재즈":0
+    }
 
-        if avg_sentiment > 0.3:
-            st.success("긍정적인 반응")
-        elif avg_sentiment < -0.3:
-            st.error("부정적인 반응")
-        else:
-            st.info("중립적인 반응")
+    for comment in comments:
 
-    # ----------------------------
-    # 워드클라우드
-    # ----------------------------
+        lower = comment.lower()
 
-    st.subheader("☁️ 워드클라우드")
+        for genre, keywords in genre_keywords.items():
 
-    wordcloud = WordCloud(
-        width=1200,
+            for keyword in keywords:
+
+                if keyword.lower() in lower:
+                    result[genre]+=1
+
+    return result
+
+# -----------------------
+# 워드클라우드
+# -----------------------
+
+def make_wordcloud(text):
+
+    wc = WordCloud(
+        width=1000,
         height=500,
         background_color="black"
     ).generate(text)
 
-    fig, ax = plt.subplots(figsize=(15,5))
+    fig, ax = plt.subplots(figsize=(12,5))
 
-    ax.imshow(wordcloud)
+    ax.imshow(wc)
     ax.axis("off")
 
     st.pyplot(fig)
 
-    # ----------------------------
-    # AI 해설
-    # ----------------------------
+# -----------------------
+# 분석 버튼
+# -----------------------
 
-    best_genre = genre_df.sort_values(
-        "확률",
-        ascending=False
-    ).iloc[0]["장르"]
+if st.button("🚀 분석 시작"):
 
-    st.subheader("🤖 AI 분석")
+    if api_key == "" or video_id == "":
+        st.warning("API Key와 Video ID를 입력하세요.")
+        st.stop()
+
+    with st.spinner("댓글 분석 중..."):
+
+        comments = get_comments(
+            api_key,
+            video_id
+        )
+
+    st.success(f"{len(comments)}개의 댓글 분석 완료!")
+
+    # -------------------
+    # 장르 분석
+    # -------------------
+
+    genre_result = analyze_genre(comments)
+
+    df = pd.DataFrame({
+        "장르":genre_result.keys(),
+        "언급수":genre_result.values()
+    })
+
+    fig = px.bar(
+        df,
+        x="장르",
+        y="언급수",
+        color="장르",
+        title="🎵 음악 장르 반응 분석"
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
+
+    # -------------------
+    # 댓글 목록
+    # -------------------
+
+    st.subheader("💬 댓글 샘플")
+
+    for c in comments[:20]:
+        st.write("•", c)
+
+    # -------------------
+    # 워드클라우드
+    # -------------------
+
+    st.subheader("🔥 인기 키워드")
+
+    text = " ".join(comments)
+
+    text = re.sub(
+        r"[^가-힣a-zA-Z ]",
+        "",
+        text
+    )
+
+    make_wordcloud(text)
+
+    # -------------------
+    # TOP 단어
+    # -------------------
+
+    words = text.split()
+
+    top_words = Counter(words).most_common(15)
+
+    word_df = pd.DataFrame(
+        top_words,
+        columns=["단어","빈도"]
+    )
+
+    fig2 = px.pie(
+        word_df,
+        names="단어",
+        values="빈도",
+        title="🏆 TOP 단어"
+    )
+
+    st.plotly_chart(
+        fig2,
+        use_container_width=True
+    )
+
+    # -------------------
+    # 결과
+    # -------------------
+
+    best_genre = max(
+        genre_result,
+        key=genre_result.get
+    )
 
     st.markdown(f"""
-### 분석 결과
+    ## 🎯 AI 판정 결과
 
-가장 높은 확률의 장르는 **{best_genre}** 입니다.
-
-댓글에서 해당 장르를 연상시키는 표현이
-가장 많이 발견되었습니다.
-
-이 영상의 청취자들은 해당 음악을
-{best_genre} 특유의 분위기로
-인식하고 있는 것으로 보입니다.
-
-댓글 수: **{len(comments)}개**
-""")
-
-    st.success("분석 완료 🎉")
+    현재 댓글 반응은
+    **{best_genre}**
+    장르 성향이 가장 강합니다.
+    """)
